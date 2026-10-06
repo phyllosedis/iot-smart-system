@@ -3,11 +3,13 @@ package sdk
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
 	"log"
 	"net/http"
+	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
@@ -34,19 +36,25 @@ var (
 )
 
 func NewClient(cfg ServiceConfig) (*Client, error) {
-	regReq := map[string]string{
+	jsonData, err := json.Marshal(map[string]string{
 		"id":    cfg.ID,
 		"name":  cfg.Name,
 		"topic": cfg.Topic,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("не удалось закодировать запрос регистрации: %w", err)
 	}
-	jsonData, err := json.Marshal(regReq)
-	if err == nil {
-		resp, err := http.Post(cfg.RegistryURL+string(RouteRegister), "application/json", bytes.NewBuffer(jsonData))
-		if err != nil {
-			log.Printf("[SDK WARN] Не удалось зарегистрироваться в Service Discovery: %v\n", err)
+
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	resp, err := httpClient.Post(cfg.RegistryURL+string(RouteRegister), "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("[SDK WARN] Не удалось зарегистрироваться в Service Discovery: %v\n", err)
+	} else {
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			log.Printf("[SDK WARN] Service Discovery вернул статус %s\n", resp.Status)
 		} else {
 			log.Printf("[SDK INIT] Успешная HTTP-регистрация. Статус: %s\n", resp.Status)
-			resp.Body.Close()
 		}
 	}
 
@@ -65,7 +73,7 @@ func NewClient(cfg ServiceConfig) (*Client, error) {
 	}, nil
 }
 
-func (c *Client) SendFrame(img *image.Paletted) {
+func (c *Client) SendFrame(img *image.Paletted) error {
 	buffer := make([]byte, 1024)
 	for page := 0; page < 8; page++ {
 		for x := 0; x < 128; x++ {
@@ -82,6 +90,7 @@ func (c *Client) SendFrame(img *image.Paletted) {
 
 	token := c.mqttClient.Publish(c.cfg.Topic, 1, false, buffer)
 	token.Wait()
+	return token.Error()
 }
 
 func CreateBaseCanvas() *image.Paletted {
@@ -95,5 +104,18 @@ func CreateBaseCanvas() *image.Paletted {
 }
 
 func (c *Client) Disconnect() {
-	c.mqttClient.Disconnect(250)
+	// Best-effort снятие с регистрации, чтобы не засорять меню на ESP32
+	jsonData, err := json.Marshal(map[string]string{"id": c.cfg.ID})
+	if err == nil {
+		httpClient := &http.Client{Timeout: 5 * time.Second}
+		resp, err := httpClient.Post(c.cfg.RegistryURL+string(RouteUnregister), "application/json", bytes.NewBuffer(jsonData))
+		if err != nil {
+			log.Printf("[SDK WARN] Не удалось сняться с регистрации: %v\n", err)
+		} else {
+			resp.Body.Close()
+		}
+	}
+	if c.mqttClient != nil {
+		c.mqttClient.Disconnect(250)
+	}
 }

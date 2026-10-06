@@ -15,11 +15,11 @@ import (
 
 func main() {
 	iotClient, err := sdk.NewClient(sdk.ServiceConfig{
-		ID:          "",
-		Name:        "",
-		Topic:       "",
-		RegistryURL: "",
-		BrokerURL:   "",
+		ID:          "go_weather_sub",
+		Name:        "WEATHER STATION",
+		Topic:       "orange/display/weather",
+		RegistryURL: "http://192.168.0.101:8080",
+		BrokerURL:   "tcp://192.168.0.169:1883",
 	})
 	if err != nil {
 		log.Fatalf("Ошибка запуска SDK: %v", err)
@@ -51,7 +51,10 @@ func main() {
 		fontDrawer.Dot = fixed.P(4, 54)
 		fontDrawer.DrawString(time.Now().Format("15:04:05"))
 
-		iotClient.SendFrame(canvas)
-		log.Println("[WEATHER] Новый кадр успешно отправлен через SDK")
+		if err := iotClient.SendFrame(canvas); err != nil {
+			log.Printf("[WEATHER] Ошибка отправки кадра: %v", err)
+		} else {
+			log.Println("[WEATHER] Новый кадр успешно отправлен через SDK")
+		}
 	}
 }

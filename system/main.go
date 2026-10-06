@@ -15,11 +15,11 @@ import (
 
 func main() {
 	iotClient, err := sdk.NewClient(sdk.ServiceConfig{
-		ID:          "",
-		Name:        "",
-		Topic:       "",
-		RegistryURL: "",
-		BrokerURL:   "",
+		ID:          "go_system_sub",
+		Name:        "SYSTEM STATION",
+		Topic:       "orange/display/system",
+		RegistryURL: "http://192.168.0.101:8080",
+		BrokerURL:   "tcp://192.168.0.169:1883",
 	})
 	if err != nil {
 		log.Fatalf("Ошибка запуска SDK: %v", err)
@@ -31,8 +31,8 @@ func main() {
 
 	for range ticker.C {
 		// 1. Собираем нужную нам инфу
-		temp := rand.Intn(15) + 15
-		humi := rand.Intn(40) + 40
+		proc := rand.Intn(15) + 15
+		mem := rand.Intn(40) + 40
 
 		canvas := sdk.CreateBaseCanvas()
 
@@ -43,15 +43,18 @@ func main() {
 		}
 
 		fontDrawer.Dot = fixed.P(4, 14)
-		fontDrawer.DrawString(fmt.Sprintf("PROC: %d %%", temp))
+		fontDrawer.DrawString(fmt.Sprintf("PROC: %d %%", proc))
 
 		fontDrawer.Dot = fixed.P(4, 34)
-		fontDrawer.DrawString(fmt.Sprintf("MEM: %d %%", humi))
+		fontDrawer.DrawString(fmt.Sprintf("MEM: %d %%", mem))
 
 		fontDrawer.Dot = fixed.P(4, 54)
 		fontDrawer.DrawString(time.Now().Format("15:04:05"))
 
-		iotClient.SendFrame(canvas)
-		log.Println("[SYSTEM] Новый кадр успешно отправлен через SDK")
+		if err := iotClient.SendFrame(canvas); err != nil {
+			log.Printf("[SYSTEM] Ошибка отправки кадра: %v", err)
+		} else {
+			log.Println("[SYSTEM] Новый кадр успешно отправлен через SDK")
+		}
 	}
 }

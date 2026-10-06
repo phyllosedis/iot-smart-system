@@ -7,6 +7,7 @@ import (
 	sdk "iot-smart-system/sdk"
 	"log"
 	"net/http"
+	"sort"
 	"sync"
 )
 
@@ -103,6 +104,7 @@ func handleGetTopics(w http.ResponseWriter, r *http.Request) {
 		list = append(list, svc)
 	}
 	mu.RUnlock()
+	sort.Slice(list, func(i, j int) bool { return list[i].ID < list[j].ID })
 
 	// Отправляем массив структур в JSON формате
 	json.NewEncoder(w).Encode(list)
